@@ -99,6 +99,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Makefile" />
+    <None Include="p3testscript" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="README.txt" />
