@@ -8,24 +8,6 @@
 #include <string.h>
 #include <fcntl.h>
 
-int MAXINPUTLEN = 2048;
-int MAXARGS = 512;
-
-char* getInput()
-{
-	char* userInput;
-	char* currLine = NULL;
-	size_t maxInputLen = MAXINPUTLEN;
-
-	userInput = calloc(MAXINPUTLEN + 1, sizeof(char));
-	printf(": ");
-	fflush(stdout);
-
-	getline(&currLine, &maxInputLen, stdin);
-	userInput = currLine;
-	return userInput;
-}
-
 struct commandLine
 {
 	char* command;
@@ -35,16 +17,60 @@ struct commandLine
 	int backgroundFlag;
 };
 
-struct commandLine* createCommandLine()
+char* getInput()
+{
+	int maxInput = 2048;
+	size_t maxInputLen = maxInput;
+	char* userInput;
+	char* currLine = NULL;
+
+	userInput = calloc(maxInput + 1, sizeof(char));
+	printf(": ");
+	fflush(stdout);
+
+	getline(&currLine, &maxInputLen, stdin);
+	userInput = currLine;
+	return userInput;
+}
+
+char* expandVar(char* line, pid_t smallshPID)
+{
+	// convert PID to str
+	char pid[21];
+	sprintf(pid, "%d", smallshPID);
+
+	// check for occurrences of $$ in line, replace with pid if so
+	char* endPtr = strstr(line, "$$");
+	while (endPtr != NULL)
+	{
+		// get character count of string prior to $$ occurrence and set endPtr forward 2 places
+		int charCount = strlen(line) - strlen(endPtr);
+		endPtr = endPtr + 2;
+
+		// allocate memory for new string, then copy/concat into a single string
+		char* copy = calloc(strlen(pid) + strlen(line) - 3, sizeof(char));
+		strncpy(copy, line, charCount);
+		strcat(copy, pid);
+		strcat(copy, endPtr);
+
+		// free line, then set equal to copy and check for next occurrence of $$
+		free(line);
+		line = copy;
+		endPtr = strstr(line, "$$");
+	}
+	return line;
+}
+
+struct commandLine* createCommandLine(pid_t smallshPID)
 {
 	struct commandLine* currCommand = malloc(sizeof(struct commandLine));
 	currCommand->backgroundFlag = 0;
 
 	char* saveptr;
-	char* line = getInput();
-	char* token = strtok_r(line, " ", &saveptr);
+	char* line = expandVar(getInput(), smallshPID);
 
-	if (strcmp(token, "\n") == 0 || token[0] == "#"[0])
+	// handle empty input
+	if (strcmp(line, "\n") == 0 || line[0] == "#"[0])
 	{
 		currCommand->command = NULL;
 		currCommand->arguments = NULL;
@@ -53,32 +79,35 @@ struct commandLine* createCommandLine()
 	}
 	else
 	{
+		line[strlen(line) - 1] = '\0';
+		char* token = strtok_r(line, " ", &saveptr);
+
+		// allocate mem for command
 		currCommand->command = calloc(strlen(token) + 1, sizeof(char));
 		strcpy(currCommand->command, token);
 
-		// handle & at end of input if exists
+		// handle & (background flag) at end of input, if exists
 		token = saveptr;
-		if (token[strlen(token) - 2] == "&"[0])
+		if (token[strlen(token) - 1] == "&"[0])
 		{
 			currCommand->backgroundFlag = 1;
-			token[strlen(token) - 3] = '\0';
-			currCommand->arguments = calloc(strlen(token) + 1, sizeof(char));
-			strcpy(currCommand->arguments, token);
-		}
-		else
-		{
-			currCommand->arguments = calloc(strlen(token) + 1, sizeof(char));
-			strcpy(currCommand->arguments, token);
+			token[strlen(token) - 2] = '\0';
 		}
 
+		currCommand->arguments = calloc(strlen(token) + 1, sizeof(char));
+		strcpy(currCommand->arguments, token);
+
 		// check for input file arg
-		char* inFile = strstr(saveptr, "< ");
-		if (inFile)
+		char* inFilePtr = strstr(saveptr, "< ");
+		int inFileStart = -1;
+		if (inFilePtr)
 		{
-			inFile = inFile + 2;
-			token = strtok_r(inFile, " ", &saveptr);
+			inFileStart = strlen(inFilePtr);
+			inFilePtr = inFilePtr + 2;
+			token = strtok_r(inFilePtr, " ", &saveptr);
 			currCommand->inputFile = calloc(strlen(token) + 1, sizeof(char));
 			strcpy(currCommand->inputFile, token);
+			inFilePtr = NULL;
 		}
 		else
 		{
@@ -86,38 +115,85 @@ struct commandLine* createCommandLine()
 		}
 
 		// check for output file arg
-		char* outFile = strstr(saveptr, "> ");
-		if (outFile)
+		char* outFilePtr = strstr(saveptr, "> ");
+		int outFileStart = -1;
+		if (outFilePtr)
 		{
-			outFile = outFile + 2;
-			token = strtok_r(outFile, " ", &saveptr);
+			outFileStart = strlen(outFilePtr);
+			outFilePtr = outFilePtr + 2;
+			token = strtok_r(outFilePtr, " ", &saveptr);
 			currCommand->outputFile = calloc(strlen(token) + 1, sizeof(char));
 			strcpy(currCommand->outputFile, token);
+			outFilePtr = NULL;
 		}
 		else
 		{
 			currCommand->outputFile = NULL;
+		}
+
+		if (inFileStart != -1 || outFileStart != -1)
+		{
+			int argEnd;
+			if (inFileStart == -1)
+			{
+				argEnd = outFileStart;
+			}
+			else
+			{
+				argEnd = inFileStart;
+			}
+
+			int charCount = strlen(currCommand->arguments) - argEnd;
+			char* copy = calloc(charCount + 1, sizeof(char));
+			strncpy(copy, currCommand->arguments, charCount);
+			free(currCommand->arguments);
+			currCommand->arguments = copy;
+		}
+
+		if (strcmp(currCommand->arguments, "") == 0)
+		{
+			free(currCommand->arguments);
+			currCommand->arguments = NULL;
 		}
 	}
 
 	return currCommand;
 }
 
-
-void processInput()
+void exitCmd()
 {
 
+}
+
+void cdCmd()
+{
+
+}
+
+void statusCmd()
+{
+
+}
+
+void printCommand(struct commandLine* command)
+{
+	printf("command: %s\n", command->command);
+	printf("arguments: %s\n", command->arguments);
+	printf("inputFile: %s\n", command->inputFile);
+	printf("outputFile: %s\n", command->outputFile);
+	printf("backgroundFlag: %i\n\n", command->backgroundFlag);
 }
 
 int main()
 {
 	pid_t smallshPID = getppid();
 
-	struct commandLine* currCommand = createCommandLine();
+	struct commandLine* currCommand = createCommandLine(smallshPID);
 
-	while (strcmp(currCommand->command, "exit") != 0)
+	for(;;)
 	{
-		currCommand = createCommandLine();
+		printCommand(currCommand);
+		currCommand = createCommandLine(smallshPID);
 	}
 
 	return 0;
