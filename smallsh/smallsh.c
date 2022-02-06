@@ -87,7 +87,7 @@ char* getInput()
 /*******************************************************************************
  *  @fn     expandVar
  *  @brief  expands the variable $$ in an unparsed user input string, replacing $$ with
- *			the provided pid of the shell
+ *          the provided pid of the shell
  * 
  *  @param  line       - pointer to user input string (unparsed command)
  *  @param  smallshPid - pid of the smallsh shell
@@ -260,7 +260,7 @@ struct commandLine* createCommandLine(pid_t smallshPid)
 /*******************************************************************************
  *  @fn    buildArgv
  *  @brief builds an array in the correct format to call execvp()
- *		   this format is: { command, arg1, arg2, ... , argN, NULL }
+ *         this format is: { command, arg1, arg2, ... , argN, NULL }
  * 
  *  @param currCommand - the current commandLine struct to be built from
  *  @param argv        - array to store arguments
@@ -420,7 +420,7 @@ void executeBuiltInCmd(struct commandLine* currCommand, int status, pid_t backgr
 /*******************************************************************************
  *  @fn    executeOtherCmd
  *  @brief attempts to execute a non-built-in command using execvp, as long as the command exists
- *		   in PATH. If so, the command is executed by the child process and exits.
+ *         in PATH. If so, the command is executed by the child process and exits.
  * 
  *  @param currCommand - commandLine struct to be run
  ******************************************************************************/
@@ -507,7 +507,7 @@ void executeOtherCmd(struct commandLine* currCommand)
 /*******************************************************************************
  *  @fn    preventBackgroundOn
  *  @brief custom signal handler for SIGTSTP; turns the preventBackground flag on,
- *		   then installs a new handler for SIGTSTP that will turn off the flag upon next signal.
+ *         then installs a new handler for SIGTSTP that will turn off the flag upon next signal.
  * 
  *  @param sig - signal number that is being handled
  *  @citation  - based off of/adapted from the following comment by Prof. Gambord:
@@ -523,7 +523,7 @@ void preventBackgroundOn(int sig)
 /*******************************************************************************
  *  @fn    preventBackgroundOff
  *  @brief custom signal handler for SIGTSTP; turns the preventBackground flag off,
- *		   then installs a new handler for SIGTSTP that will turn on the flag upon next signal.
+ *         then installs a new handler for SIGTSTP that will turn on the flag upon next signal.
  *
  *  @param sig - signal number that is being handled
  *  @citation  - based off of/adapted from the following comment by Prof. Gambord:
@@ -539,17 +539,17 @@ void preventBackgroundOff(int sig)
 /*******************************************************************************
  *  @fn    main
  *  @brief main smallsh shell; this program will request the user to input a command with arguments,
- *		   including input/output files, and a designation on whether or not the process should run
- *		   in the foreground or background.
+ *         including input/output files, and a designation on whether or not the process should run
+ *         in the foreground or background.
  *
- *		   A command must be in the following format, with options in square brackets being optional:
- *		   command [arg1 arg2 ...] [< input_file] [> output_file] [&]
+ *         A command must be in the following format, with options in square brackets being optional:
+ *         command [arg1 arg2 ...] [< input_file] [> output_file] [&]
  * 
- *		   Notes:
- *		   - comments can be entered into the shell by putting # at the begining of any input.
- *		   - the special variable $$ will be expanded into the process ID of the shell.
- *		   - built in commands include: exit, cd, and status.
- *		   - other commands can be run as long as they exist in PATH.
+ *         Notes:
+ *         - comments can be entered into the shell by putting # at the begining of any input.
+ *         - the special variable $$ will be expanded into the process ID of the shell.
+ *         - built in commands include: exit, cd, and status.
+ *         - other commands can be run as long as they exist in PATH.
  ******************************************************************************/
 int main()
 {
@@ -588,7 +588,7 @@ int main()
 				exit(1);
 			}
 
-			// block run by the child process; set custom sig handlers and execute commands
+			// run by the child process; set custom sig handlers and execute commands
 			else if (childPid == 0)
 			{
 				// install signal to ignore SIGTSTP in child process
@@ -603,13 +603,13 @@ int main()
 				// current command shall be run in the foreground (wait for child)
 				else
 				{
-					// re-istall default signal for SIGINT
+					// re-install default signal for SIGINT
 					signal(SIGINT, SIG_DFL);
 					executeOtherCmd(currCommand);
 				}
 			}
 			
-			// block run by the parent process
+			// run by the parent process
 			else
 			{
 				// if background command, do not wait for child to complete
