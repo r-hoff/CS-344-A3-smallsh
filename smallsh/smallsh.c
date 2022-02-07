@@ -541,7 +541,7 @@ void preventBackgroundOff(int sig)
 
 /*******************************************************************************
  *  @fn    killSelf
- *  @brief custom signal handler for SIGINT; has a process kill itself upon reciept.
+ *  @brief custom signal handler for SIGINT; has a process kill itself upon reciept, then sets to ignore SIGINT again.
  *  @param sig - signal number that is being handled
  ******************************************************************************/
 void killSelf(int sig)
@@ -567,7 +567,7 @@ void killSelf(int sig)
  ******************************************************************************/
 int main()
 {
-	// install signal handler for SIGINT and SIGTSTP
+	// install signal handlers for SIGINT and SIGTSTP
 	signal(SIGINT, SIG_IGN);
 	signal(SIGTSTP, &preventBackgroundOn);
 
@@ -583,7 +583,7 @@ int main()
 	struct commandLine* currCommand = createCommandLine(smallshPid);
 	int status = 0;
 
-	// after getting input setup a signal mask to catch pending signals during foreground processes
+	// after getting input, setup a signal mask to catch pending SIGTSTP signals during foreground processes
 	sigset_t mask, pendingMask;
 	sigemptyset(&mask);
 	sigaddset(&mask, SIGTSTP);
