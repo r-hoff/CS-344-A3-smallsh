@@ -540,6 +540,17 @@ void preventBackgroundOff(int sig)
 }
 
 /*******************************************************************************
+ *  @fn    killSelf
+ *  @brief custom signal handler for SIGINT; has a process kill itself upon reciept.
+ *  @param sig - signal number that is being handled
+ ******************************************************************************/
+void killSelf(int sig)
+{
+	kill(getpid(), SIGINT);
+	signal(SIGINT, SIG_IGN);
+}
+
+/*******************************************************************************
  *  @fn    main
  *  @brief main smallsh shell; this program will request the user to input a command with arguments,
  *         including input/output files, and a designation on whether or not the process should run
@@ -617,8 +628,8 @@ int main()
 				// current command shall be run in the foreground (wait for child)
 				else
 				{
-					// re-install default signal for SIGINT for foreground processes
-					signal(SIGINT, SIG_DFL);
+					// install custom SIGINT handler (process kills itself when recieving signal)
+					signal(SIGINT, &killSelf);
 					executeOtherCmd(currCommand);
 				}
 			}
@@ -636,6 +647,9 @@ int main()
 					// print info to user about background pid
 					printf("background pid is %d\n", childPid);
 					fflush(stdout);
+
+					// unblock SIGTSTP
+					sigprocmask(SIG_UNBLOCK, &mask, NULL);
 				}
 
 				// if foreground command, wait for child to complete
@@ -696,6 +710,13 @@ int main()
 				{
 					printf("stopped by signal %d\n", WSTOPSIG(backgroundStatus));
 					fflush(stdout);
+				}
+
+				// if a pending signal was recieved and a background child completed on the same iteration,
+				// output still needs to occur
+				if (skipOutput)
+				{
+					skipOutput = 0;
 				}
 
 				// remove the current child from the array
