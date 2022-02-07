@@ -300,18 +300,6 @@ void buildArgv(struct commandLine* currCommand, char* argv[])
 	}
 }
 
-// temp for testing, remove before submission
-void printCommand(struct commandLine* command)
-{
-	printf("command: %s\n", command->command);
-	printf("arguments: %s\n", command->arguments);
-	printf("inputFile: %s\n", command->inputFile);
-	printf("outputFile: %s\n", command->outputFile);
-	printf("backgroundFlag: %i\n", command->backgroundFlag);
-	printf("builtinCmd: %i\n\n", command->builtinCmd);
-	fflush(stdout);
-}
-
 /*******************************************************************************
  *  @fn    executeBuiltInCmd
  *  @brief executes three built in commands for the smallsh shell - exit, cd, and status.
@@ -401,21 +389,25 @@ void executeBuiltInCmd(struct commandLine* currCommand, int status, pid_t backgr
 				fflush(stdout);
 			}
 		}
-
 	}
 
 	// requested command is status
 	else if (strcmp(currCommand->command, "status") == 0)
 	{
 		// print status of last run foreground process
-		if (WIFSIGNALED(status))
+		if (WIFEXITED(status))
+		{
+			printf("exit value %d\n", WEXITSTATUS(status));
+			fflush(stdout);
+		}
+		else if (WIFSIGNALED(status))
 		{
 			printf("terminated by signal %d\n", WTERMSIG(status));
 			fflush(stdout);
 		}
-		else if (WIFEXITED(status))
+		else if (WIFSTOPPED(status))
 		{
-			printf("exit value %d\n", WEXITSTATUS(status));
+			printf("stopped by signal %d\n", WSTOPSIG(status));
 			fflush(stdout);
 		}
 	}
@@ -654,10 +646,15 @@ int main()
 						skipOutput = 1;
 					}
 
-					// if the child was terminated before completion, print info to user
+					// if the child was terminated or stopped before completion, print info to user
 					if (WIFSIGNALED(status))
 					{
 						printf("terminated by signal %d\n", WTERMSIG(status));
+						fflush(stdout);
+					}
+					else if (WIFSTOPPED(status))
+					{
+						printf("stopped by signal %d\n", WSTOPSIG(status));
 						fflush(stdout);
 					}
 				}
@@ -672,20 +669,25 @@ int main()
 				break;
 			}
 
-			// if child has an updated status, print to user information about its exit/term status
+			// if child has an updated status, print to user information about its exit/term/stop status
 			else if (waitpid(backgroundChildren[i], &backgroundStatus, WNOHANG) != 0)
 			{
 				printf("background pid %d is done: ", backgroundChildren[i]);
 				fflush(stdout);
 
-				if (WIFSIGNALED(backgroundStatus))
+				if (WIFEXITED(backgroundStatus))
+				{
+					printf("exit value %d\n", WEXITSTATUS(backgroundStatus));
+					fflush(stdout);
+				}
+				else if (WIFSIGNALED(backgroundStatus))
 				{
 					printf("terminated by signal %d\n", WTERMSIG(backgroundStatus));
 					fflush(stdout);
 				}
-				else if (WIFEXITED(backgroundStatus))
+				else if (WIFSTOPPED(backgroundStatus))
 				{
-					printf("exit value %d\n", WEXITSTATUS(backgroundStatus));
+					printf("stopped by signal %d\n", WSTOPSIG(backgroundStatus));
 					fflush(stdout);
 				}
 
