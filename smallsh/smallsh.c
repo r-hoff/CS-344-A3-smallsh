@@ -76,8 +76,6 @@ char* getInput()
 
 	// allocate storage for input, then get user input
 	userInput = calloc(maxInput + 1, sizeof(char));
-	printf(": ");
-	fflush(stdout);
 	getline(&userInput, &maxInputLen, stdin);
 
 	// return the line of input
@@ -195,6 +193,7 @@ struct commandLine* createCommandLine(pid_t smallshPid)
 		int inFileStart = -1;
 		if (inFilePtr)
 		{
+			// if < is found in the line, parse and save inputFile to struct
 			inFileStart = strlen(inFilePtr);
 			inFilePtr = inFilePtr + 2;
 			token = strtok_r(inFilePtr, " ", &saveptr);
@@ -204,6 +203,7 @@ struct commandLine* createCommandLine(pid_t smallshPid)
 		}
 		else
 		{
+			// otherwise, set to NULL
 			currCommand->inputFile = NULL;
 		}
 
@@ -212,6 +212,7 @@ struct commandLine* createCommandLine(pid_t smallshPid)
 		int outFileStart = -1;
 		if (outFilePtr)
 		{
+			// if > is found in the line, parse and save outputFile to struct
 			outFileStart = strlen(outFilePtr);
 			outFilePtr = outFilePtr + 2;
 			token = strtok_r(outFilePtr, " ", &saveptr);
@@ -221,12 +222,14 @@ struct commandLine* createCommandLine(pid_t smallshPid)
 		}
 		else
 		{
+			// otherwise, set to NULL
 			currCommand->outputFile = NULL;
 		}
 
 		// remove input/output from arguments string if present
 		if (inFileStart != -1 || outFileStart != -1)
 		{
+			// determine where arguments end and file input/output begins
 			int argEnd;
 			if (inFileStart == -1)
 			{
@@ -237,6 +240,7 @@ struct commandLine* createCommandLine(pid_t smallshPid)
 				argEnd = inFileStart;
 			}
 
+			// copy line upto that point and save as arguments
 			int charCount = strlen(currCommand->arguments) - argEnd;
 			char* copy = calloc(charCount + 1, sizeof(char));
 			strncpy(copy, currCommand->arguments, charCount);
@@ -244,7 +248,7 @@ struct commandLine* createCommandLine(pid_t smallshPid)
 			currCommand->arguments = copy;
 		}
 
-		// if arguments are empty, set to null
+		// if arguments are empty at this point, set to NULL
 		if (strcmp(currCommand->arguments, "") == 0)
 		{
 			free(currCommand->arguments);
@@ -252,7 +256,7 @@ struct commandLine* createCommandLine(pid_t smallshPid)
 		}
 	}
 
-	// free the line and return the command
+	// free input line and return the command
 	free(line);
 	return currCommand;
 }
@@ -553,7 +557,7 @@ void preventBackgroundOff(int sig)
  ******************************************************************************/
 int main()
 {
-	// install signal handlers for SIGINT and SIGTSTP
+	// install signal handler for SIGINT and SIGTSTP
 	signal(SIGINT, SIG_IGN);
 	signal(SIGTSTP, &preventBackgroundOn);
 
@@ -564,11 +568,22 @@ int main()
 
 	// get pid of smallsh, then get first command from user
 	pid_t smallshPid = getpid();
+	printf(": ");
+	fflush(stdout);
 	struct commandLine* currCommand = createCommandLine(smallshPid);
 	int status = 0;
 
+	// after getting input setup a signal mask to catch pending signals during foreground processes
+	sigset_t mask, pendingMask;
+	sigemptyset(&mask);
+	sigaddset(&mask, SIGTSTP);
+	int skipOutput = 0;
+
 	for(;;)
 	{
+		// block SIGTSTP signal until process is complete
+		sigprocmask(SIG_BLOCK, &mask, NULL);
+
 		// current command is a built in command
 		if (currCommand->builtinCmd == 1)
 		{
@@ -580,7 +595,7 @@ int main()
 		{
 			pid_t childPid = fork();
 
-			// fork failed, exit 1
+			// fork failed, exit 1 immediately
 			if (childPid == -1)
 			{
 				freeCommand(currCommand);
@@ -591,7 +606,7 @@ int main()
 			// run by the child process; set custom sig handlers and execute commands
 			else if (childPid == 0)
 			{
-				// install signal to ignore SIGTSTP in child process
+				// install signal to ignore SIGTSTP in child process for both foreground and background
 				signal(SIGTSTP, SIG_IGN);
 
 				// current command shall be run in the background if flag is set and is not a built in command
@@ -603,7 +618,7 @@ int main()
 				// current command shall be run in the foreground (wait for child)
 				else
 				{
-					// re-install default signal for SIGINT
+					// re-install default signal for SIGINT for foreground processes
 					signal(SIGINT, SIG_DFL);
 					executeOtherCmd(currCommand);
 				}
@@ -629,6 +644,16 @@ int main()
 				{
 					waitpid(childPid, &status, WUNTRACED);
 
+					// unblock SIGTSTP and check if there was a pending signal for SIGTSTP while waiting for childpid
+					sigpending(&pendingMask);
+					sigprocmask(SIG_UNBLOCK, &mask, NULL);
+
+					// if SIGTSTP was pending, set skipOutput to 1 (this is used to prevent double output of : )
+					if (sigismember(&pendingMask, SIGTSTP))
+					{
+						skipOutput = 1;
+					}
+
 					// if the child was terminated before completion, print info to user
 					if (WIFSIGNALED(status))
 					{
@@ -651,6 +676,7 @@ int main()
 			else if (waitpid(backgroundChildren[i], &backgroundStatus, WNOHANG) != 0)
 			{
 				printf("background pid %d is done: ", backgroundChildren[i]);
+				fflush(stdout);
 
 				if (WIFSIGNALED(backgroundStatus))
 				{
@@ -678,6 +704,18 @@ int main()
 				// decrease child count
 				childCount--;
 			}
+		}
+
+		// if no pending signal was recieved during last run foreground process, print :
+		if (!skipOutput)
+		{
+			printf(": ");
+			fflush(stdout);
+		}
+		// otherwise, : has already been printed, so skip the output and set skipOutput back to 0
+		else
+		{
+			skipOutput = 0;
 		}
 
 		// free current command, then get next command from user
