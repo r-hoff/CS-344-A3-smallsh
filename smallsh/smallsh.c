@@ -94,7 +94,7 @@ char* getInput()
 char* expandVar(char* line, pid_t smallshPid)
 {
 	// convert PID to str
-	char pid[21];
+	char pid[10];
 	sprintf(pid, "%d", smallshPid);
 
 	// check for occurrences of $$ in line, replace with pid if so
@@ -271,32 +271,31 @@ struct commandLine* createCommandLine(pid_t smallshPid)
  ******************************************************************************/
 void buildArgv(struct commandLine* currCommand, char* argv[])
 {
+	// initialize pointer/token and set argv[0] equal to command
 	char* saveptr;
 	char* token = currCommand->command;
-	int i = 0;
+	argv[0] = calloc(strlen(token) + 1, sizeof(char));
+	strcpy(argv[0], token);
 
-	// the current command has arguments
+	// if the current command has arguments
+	int i = 1;
 	if (currCommand->arguments != NULL)
 	{
 		// make a copy of the arguments to parse
 		char* args = calloc(strlen(currCommand->arguments) + 1, sizeof(char));
 		strcpy(args, currCommand->arguments);
+		token = strtok_r(args, " ", &saveptr);
 		
 		// break each individual argument into a token and store in next slot in array
 		while (token != NULL)
 		{
 			argv[i] = calloc(strlen(token) + 1, sizeof(char));
 			strcpy(argv[i], token);
-			token = strtok_r(args, " ", &saveptr);
-			args = saveptr;
+			token = saveptr;
+			token = strtok_r(token, " ", &saveptr);
 			i++;
 		}
-	}
-	// the current command has no arguments; set first element of array equal to command
-	else
-	{
-		argv[i] = calloc(strlen(token) + 1, sizeof(char));
-		strcpy(argv[i], token);
+		free(args);
 	}
 }
 
@@ -363,12 +362,6 @@ void executeBuiltInCmd(struct commandLine* currCommand, int status, pid_t backgr
 				int maxPath = 4096;
 				char buffer[maxPath + 1];
 				getcwd(buffer, maxPath + 1);
-
-				// if the argument provided starts with ./, remove them from the string
-				if (currCommand->arguments[0] == "."[0] && currCommand->arguments[1] == "/"[0])
-				{
-					currCommand->arguments = currCommand->arguments + 2;
-				}
 
 				// allocate memory for new string, then copy/concat into a single string
 				int charCount = strlen(buffer) + strlen(currCommand->arguments);
@@ -491,9 +484,23 @@ void executeOtherCmd(struct commandLine* currCommand)
 	// execute command; if no return, command was successful
 	int result = execvp(argv[0], argv);
 
-	// if returned, print error and exit 1
+	// if returned, cleanup allocated memory and print error
 	if (result == -1)
 	{
+		int argvLen = sizeof argv / sizeof * argv;
+		for (int i = 0; i < argvLen; i++)
+		{
+			if (argv[i] != NULL)
+			{
+				free(argv[i]);
+			}
+			else
+			{
+				break;
+			}
+		}
+
+		// print error and exit 1
 		printf("%s\n", strerror(errno));
 		fflush(stdout);
 		exit(1);
